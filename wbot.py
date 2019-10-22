@@ -5,92 +5,80 @@ import telepot
 from telepot.loop import MessageLoop
 import os
 
-import redis
-from rq import Worker, Queue, Connection
+
 
 from dotenv import load_dotenv
 load_dotenv()
 
 
-listen = ['high', 'default', 'low']
+# authenticator = IAMAuthenticator('njyivfAVLyznXwryzdRrNBIH5tO5rGaVO4W_TNxFnapg')
+authenticator = IAMAuthenticator(os.getenv('API_KEY'))
 
-redis_url = os.getenv('REDISTOGO_URL', 'redis://localhost:6379')
+service = AssistantV1(
+    version='2019-02-08',
+    authenticator=authenticator
+)
 
-conn = redis.from_url(redis_url)
+service.set_service_url('https://gateway.watsonplatform.net/assistant/api')
 
-if __name__ == '__main__':
-    with Connection(conn):
-        worker = Worker(map(Queue, listen))
-        worker.work()
+# telegram = telepot.Bot("896415169:AAF-m60qjYm2WYFh36lpS8EWpiIbgn5CZ84")
+telegram = telepot.Bot(os.getenv('TELEGRAM_TOKEN'))
 
-    # authenticator = IAMAuthenticator('njyivfAVLyznXwryzdRrNBIH5tO5rGaVO4W_TNxFnapg')
-    authenticator = IAMAuthenticator(os.getenv('API_KEY'))
-
-    service = AssistantV1(
-        version='2019-02-08',
-        authenticator=authenticator
-    )
-
-    service.set_service_url('https://gateway.watsonplatform.net/assistant/api')
-
-    # telegram = telepot.Bot("896415169:AAF-m60qjYm2WYFh36lpS8EWpiIbgn5CZ84")
-    telegram = telepot.Bot(os.getenv('TELEGRAM_TOKEN'))
-
-    context = {}
+context = {}
 
 
-    def recebendoMsg(msg):
+def recebendoMsg(msg):
 
-        frase = msg['text']
+    frase = msg['text']
 
-        if context is not None:
+    if context is not None:
 
-            response = service.message(
-                workspace_id=os.getenv('WORKSPACE_ID'),
-                input={
-                    'text': frase
-                },
-                context=context
-            ).get_result()
+        response = service.message(
+            workspace_id=os.getenv('WORKSPACE_ID'),
+            input={
+                'text': frase
+            },
+            context=context
+        ).get_result()
 
-            resp = response.get('output').get('text')
+        resp = response.get('output').get('text')
 
-            i = 0
-            for r in resp:
-                i += 1
-                tipoMsg, tipoChat, chatID = telepot.glance(msg)
-                if tipoMsg == 'text':
-                    telegram.sendMessage(chatID, r)
+        i = 0
+        for r in resp:
+            i += 1
+            tipoMsg, tipoChat, chatID = telepot.glance(msg)
+            if tipoMsg == 'text':
+                telegram.sendMessage(chatID, r)
 
-        else:
-            response = service.message(
-                workspace_id=os.getenv('WORKSPACE_ID'),
-                input={
-                    'text': frase
-                }
-            ).get_result()
+    else:
+        response = service.message(
+            workspace_id=os.getenv('WORKSPACE_ID'),
+            input={
+                'text': frase
+            }
+        ).get_result()
 
-            resp = response.get('output').get('text')
+        resp = response.get('output').get('text')
 
-            i = 0
-            for r in resp:
-                i += 1
-                tipoMsg, tipoChat, chatID = telepot.glance(msg)
-                if tipoMsg == 'text':
-                    telegram.sendMessage(chatID, r)
+        i = 0
+        for r in resp:
+            i += 1
+            tipoMsg, tipoChat, chatID = telepot.glance(msg)
+            if tipoMsg == 'text':
+                telegram.sendMessage(chatID, r)
 
-        def change_context():
-            global context
-            context = response.get('context')
+    def change_context():
+        global context
+        context = response.get('context')
 
-        change_context()
+    change_context()
 
-        # tipoMsg, tipoChat, chatID = telepot.glance(msg)
-        # if tipoMsg == 'text':
-        #     telegram.sendMessage(chatID, resposta)
+    # tipoMsg, tipoChat, chatID = telepot.glance(msg)
+    # if tipoMsg == 'text':
+    #     telegram.sendMessage(chatID, resposta)
 
 
-    MessageLoop(telegram, recebendoMsg).run_as_thread()
+MessageLoop(telegram, recebendoMsg).run_as_thread()
 
-    while True:
-        pass
+while True:
+    pass
